@@ -337,11 +337,6 @@ namespace Util
 	void makeDecision(int color){
 
 	}
-double grade(int color){
-		double mean=countMeanHeight(color),SMR=countHeightSMR(color);
-		int embedded=countEmbeddedCell(color),eliminated=countEliminatedLines(color);
-		return eliminated*weigh[0]+embedded*weigh[1]+mean*weigh[2]+SMR*weigh[3];
-	}
 	int countEliminatedLines(int color){
 		bool flag=false;
 		int count=0;
@@ -359,12 +354,13 @@ double grade(int color){
 	}
 	int countEmbeddedCell(int color){
 		queue<pair<int,int> > que;
-		int FreeCellNum,GridNum,v[MAPHEIGHT][MAPWIDTH]={0};
+		int FreeCellNum,GridNum;
+		int v[MAPHEIGHT][MAPWIDTH]={0};
 		for(int i=1;i<=MAPWIDTH;i++)
 			if(gridInfo[color][MAPHEIGHT][i]==0){
 				pair<int,int> tmp(MAPHEIGHT,i);
 				que.push(tmp);
-				FreeCellNum++,v[MAPHEIGHT[i]=1];
+				FreeCellNum++,v[MAPHEIGHT][i]=1;
 			}
 		while(!que.empty()){
 			pair<int,int> tmp=que.front();
@@ -407,6 +403,11 @@ double grade(int color){
 		for(int i=1;i<=MAPWIDTH;i++)
 			SS+=(Height[i]-mean)*(Height[i]-mean);
 		return SS/MAPWIDTH;
+	}
+	double grade(int color){
+			double mean=Util::countMeanHeight(color),SMR=Util::countHeightSMR(color);
+			int embedded=Util::countEmbeddedCell(color),eliminated=Util::countEliminatedLines(color);
+			return eliminated*weigh[0]+embedded*weigh[1]+mean*weigh[2]+SMR*weigh[3];
 	}
 }
 
