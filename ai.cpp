@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <queue>
 using namespace std;
 #define MAPWIDTH 10
 #define MAPHEIGHT 20
@@ -55,6 +56,15 @@ const int blockShape[7][4][8] = {
 	{ { 0,0,0,-1,0,1,0,2 },{ 0,0,1,0,-1,0,-2,0 },{ 0,0,0,1,0,-1,0,-2 },{ 0,0,-1,0,1,0,2,0 } },
 	{ { 0,0,0,1,-1,0,-1,1 },{ 0,0,-1,0,0,-1,-1,-1 },{ 0,0,0,-1,1,-0,1,-1 },{ 0,0,1,0,0,1,1,1 } }
 };// 7种形状(长L| 短L| 反z| 正z| T| 直一| 田格)，4种朝向(上左下右)，8:每相邻的两个分别为x，y
+
+const int dxdy[4][2]={{0,1},{0,-1},{1,0},{-1,0}};
+/**
+*	1-eliminated
+*	2-embedded
+*	3-mean
+*	4-SMR
+**/
+const double weigh[4]={};
 //#endregion Variable
 
 //#region Tetris_Class
@@ -169,7 +179,7 @@ void init()
 
 namespace Util
 {
-
+//#region Trivial
 	// 检查能否从场地顶端直接落到当前位置
 	inline bool checkDirectDropTo(int color, int blockType, int x, int y, int o)
 	{
@@ -185,7 +195,7 @@ namespace Util
 			}
 		return true;
 	}
-//#region Trivial
+
 	// 消去行
 	void eliminate(int color)
 	{
@@ -324,6 +334,80 @@ namespace Util
 #endif
 	}
 //#endregion Trivial
+	void makeDecision(int color){
+
+	}
+double grade(int color){
+		double mean=countMeanHeight(color),SMR=countHeightSMR(color);
+		int embedded=countEmbeddedCell(color),eliminated=countEliminatedLines(color);
+		return eliminated*weigh[0]+embedded*weigh[1]+mean*weigh[2]+SMR*weigh[3];
+	}
+	int countEliminatedLines(int color){
+		bool flag=false;
+		int count=0;
+		for(int i=1;i<=MAPHEIGHT;i++){
+			flag=true;
+			for(int j=1;j<=MAPWIDTH;j++)
+				if(!gridInfo[color][i][j]){
+					flag=false;
+					break;
+				}
+			if(flag)
+				count++;
+		}
+		return count;
+	}
+	int countEmbeddedCell(int color){
+		queue<pair<int,int> > que;
+		int FreeCellNum,GridNum,v[MAPHEIGHT][MAPWIDTH]={0};
+		for(int i=1;i<=MAPWIDTH;i++)
+			if(gridInfo[color][MAPHEIGHT][i]==0){
+				pair<int,int> tmp(MAPHEIGHT,i);
+				que.push(tmp);
+				FreeCellNum++,v[MAPHEIGHT[i]=1];
+			}
+		while(!que.empty()){
+			pair<int,int> tmp=que.front();
+			que.pop();
+			for(int i=0;i<4;i++){
+				int tmpx=tmp.first+dxdy[i][0],tmpy=tmp.second+dxdy[i][1];
+				if(!v[tmpx][tmpy]&&!gridInfo[color][tmpx][tmpy]){
+					v[tmpx][tmpy]=1,FreeCellNum++;
+					pair<int,int> tmp1(tmpx,tmpy);
+					que.push(tmp1);
+				}
+			}
+		}
+		for(int i=1;i<=MAPHEIGHT;i++)
+			for(int j=1;j<=MAPWIDTH;j++)
+				if(gridInfo[color][i][j])
+					GridNum++;
+		return MAPWIDTH*MAPHEIGHT-FreeCellNum-GridNum;
+	}
+	double countMeanHeight(int color){
+		int Height[MAPWIDTH+1];
+		double sum;
+		for(int i=1;i<=MAPWIDTH;i++)
+			for(int j=1;j<=MAPHEIGHT;j++)
+				if(gridInfo[color][j][i]&&Height[i]<j){
+					Height[i]=j;
+				}
+		for(int i=1;i<=MAPWIDTH;i++)
+			sum+=Height[i];
+		return sum/MAPWIDTH;
+	}
+	double countHeightSMR(int color){
+		double mean=countMeanHeight(color),SS;
+		int Height[MAPWIDTH+1];
+		for(int i=1;i<=MAPWIDTH;i++)
+			for(int j=1;j<=MAPHEIGHT;j++)
+				if(gridInfo[color][j][i]&&Height[i]<j){
+					Height[i]=j;
+				}
+		for(int i=1;i<=MAPWIDTH;i++)
+			SS+=(Height[i]-mean)*(Height[i]-mean);
+		return SS/MAPWIDTH;
+	}
 }
 
 
