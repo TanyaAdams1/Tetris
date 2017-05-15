@@ -64,7 +64,7 @@ const int dxdy[4][2]={{0,1},{0,-1},{1,0},{-1,0}};
 *	3-mean
 *	4-SMR
 **/
-const double weigh[4]={};
+const double weigh[4]={2,-1,-0.5,-0.5};
 //#endregion Variable
 
 //#region Tetris_Class
