@@ -15,6 +15,9 @@
 #include <cstdlib>
 #include <ctime>
 #include <queue>
+#include <vector>
+#include <deque>
+#include <list>
 using namespace std;
 #define MAPWIDTH 10
 #define MAPHEIGHT 20
@@ -57,16 +60,41 @@ const int blockShape[7][4][8] = {
 	{ { 0,0,0,1,-1,0,-1,1 },{ 0,0,-1,0,0,-1,-1,-1 },{ 0,0,0,-1,1,-0,1,-1 },{ 0,0,1,0,0,1,1,1 } }
 };// 7种形状(长L| 短L| 反z| 正z| T| 直一| 田格)，4种朝向(上左下右)，8:每相邻的两个分别为x，y
 
+int turnID, blockType;
+int nextTypeForColor[2];
+int blockForEnemy, finalX, finalY, finalO;
 const int dxdy[4][2]={{0,1},{0,-1},{1,0},{-1,0}};
 /**
 *	1-eliminated
 *	2-embedded
 *	3-mean
-*	4-SMR
+*   4-SMR
+*   5-variance
+*   6-lineLeft
+*   7-covered
 **/
-const double weigh[4]={2,-1,-0.5,-0.5};
+const double weigh[]={
+    4,      //eliminated
+    -2,     //embedded
+    -0.5,   //mean
+    -1.5,   //SMR
+    -0.5,   //variance
+    -25,    //lineLeft
+    -1.5    //covered
+};
 //#endregion Variable
-
+//#region function
+int makeDropDecision(int);
+double grade(int);
+int countEliminatedLines(int);
+int countEmbeddedCell(int);
+double countHeightSMR(int);
+double countMeanHeight(int);
+bool checkDrop(int,int,int,int,int);
+double countHeightVariance(int);
+double countLineLeft(int);
+int countCoveredCells(int);
+void displace(int);
 //#region Tetris_Class
 class Tetris
 {
@@ -334,81 +362,7 @@ namespace Util
 #endif
 	}
 //#endregion Trivial
-	void makeDecision(int color){
 
-	}
-	int countEliminatedLines(int color){
-		bool flag=false;
-		int count=0;
-		for(int i=1;i<=MAPHEIGHT;i++){
-			flag=true;
-			for(int j=1;j<=MAPWIDTH;j++)
-				if(!gridInfo[color][i][j]){
-					flag=false;
-					break;
-				}
-			if(flag)
-				count++;
-		}
-		return count;
-	}
-	int countEmbeddedCell(int color){
-		queue<pair<int,int> > que;
-		int FreeCellNum,GridNum;
-		int v[MAPHEIGHT][MAPWIDTH]={0};
-		for(int i=1;i<=MAPWIDTH;i++)
-			if(gridInfo[color][MAPHEIGHT][i]==0){
-				pair<int,int> tmp(MAPHEIGHT,i);
-				que.push(tmp);
-				FreeCellNum++,v[MAPHEIGHT][i]=1;
-			}
-		while(!que.empty()){
-			pair<int,int> tmp=que.front();
-			que.pop();
-			for(int i=0;i<4;i++){
-				int tmpx=tmp.first+dxdy[i][0],tmpy=tmp.second+dxdy[i][1];
-				if(!v[tmpx][tmpy]&&!gridInfo[color][tmpx][tmpy]){
-					v[tmpx][tmpy]=1,FreeCellNum++;
-					pair<int,int> tmp1(tmpx,tmpy);
-					que.push(tmp1);
-				}
-			}
-		}
-		for(int i=1;i<=MAPHEIGHT;i++)
-			for(int j=1;j<=MAPWIDTH;j++)
-				if(gridInfo[color][i][j])
-					GridNum++;
-		return MAPWIDTH*MAPHEIGHT-FreeCellNum-GridNum;
-	}
-	double countMeanHeight(int color){
-		int Height[MAPWIDTH+1];
-		double sum;
-		for(int i=1;i<=MAPWIDTH;i++)
-			for(int j=1;j<=MAPHEIGHT;j++)
-				if(gridInfo[color][j][i]&&Height[i]<j){
-					Height[i]=j;
-				}
-		for(int i=1;i<=MAPWIDTH;i++)
-			sum+=Height[i];
-		return sum/MAPWIDTH;
-	}
-	double countHeightSMR(int color){
-		double mean=countMeanHeight(color),SS;
-		int Height[MAPWIDTH+1];
-		for(int i=1;i<=MAPWIDTH;i++)
-			for(int j=1;j<=MAPHEIGHT;j++)
-				if(gridInfo[color][j][i]&&Height[i]<j){
-					Height[i]=j;
-				}
-		for(int i=1;i<=MAPWIDTH;i++)
-			SS+=(Height[i]-mean)*(Height[i]-mean);
-		return SS/MAPWIDTH;
-	}
-	double grade(int color){
-			double mean=Util::countMeanHeight(color),SMR=Util::countHeightSMR(color);
-			int embedded=Util::countEmbeddedCell(color),eliminated=Util::countEliminatedLines(color);
-			return eliminated*weigh[0]+embedded*weigh[1]+mean*weigh[2]+SMR*weigh[3];
-	}
 }
 
 
@@ -417,12 +371,9 @@ int main()
 {
 	//#region Trivial
 	// 加速输入
-	istream::sync_with_stdio(false);
 	srand(time(NULL));
 	init();
 
-	int turnID, blockType;
-	int nextTypeForColor[2];
 	cin >> turnID;
 
 	// 先读入第一回合，得到自己的颜色
@@ -478,31 +429,14 @@ int main()
 //#endregion Trivial
 
 //#region Decision
-	int blockForEnemy, finalX, finalY, finalO;
 
 	// 做出决策（你只需修改以下部分）
-
+	makeDropDecision(currBotColor);
 	// 遇事不决先输出（平台上编译不会输出）
-	Util::printField();
+	//Util::printField();
 
 	// 贪心决策
 	// 从下往上以各种姿态找到第一个位置，要求能够直着落下
-	Tetris block(nextTypeForColor[currBotColor], currBotColor);
-	for (int y = 1; y <= MAPHEIGHT; y++)
-		for (int x = 1; x <= MAPWIDTH; x++)
-			for (int o = 0; o < 4; o++)
-			{
-				if (block.set(x, y, o).isValid() &&
-					Util::checkDirectDropTo(currBotColor, block.blockType, x, y, o))
-				{
-					finalX = x;
-					finalY = y;
-					finalO = o;
-					goto determined;
-				}
-			}
-
-determined:
 	// 再看看给对方什么好
 
 	int maxCount = 0, minCount = 99;
@@ -530,4 +464,193 @@ determined:
 	cout << blockForEnemy << " " << finalX << " " << finalY << " " << finalO;
 
 	return 0;
+}
+
+int makeDropDecision(int color){
+    double MaxGrade=-1e10;
+    Tetris block(nextTypeForColor[currBotColor], currBotColor);
+	for (int y = 1; y <= MAPHEIGHT; y++)
+		for (int x = 1; x <= MAPWIDTH; x++)
+			for (int o = 0; o < 4; o++)
+			{
+				if (block.set(x, y, o).isValid() &&
+					block.set(x,y,o).onGround()&&
+					checkDrop(currBotColor, block.blockType, x, y, o))
+				{
+					block.place();
+					double tmp=grade(color);
+					if(tmp>MaxGrade){
+                        			MaxGrade=tmp;
+                        			finalX=x,finalY=y,finalO=o;
+					}
+					displace(color);
+				}
+			}
+}
+int countEliminatedLines(int color){
+		bool flag=false;
+		int count=0;
+		for(int i=1;i<=MAPHEIGHT;i++){
+			flag=true;
+			for(int j=1;j<=MAPWIDTH;j++)
+				if(!gridInfo[color][i][j]){
+					flag=false;
+					break;
+				}
+			if(flag)
+				count++;
+		}
+		return count;
+	}
+int countEmbeddedCell(int color){
+		list<pair<int,int> > que;
+		int FreeCellNum=0,GridNum=0;
+		int v[MAPHEIGHT+1][MAPWIDTH+1]={0};
+		for(int i=1;i<=MAPWIDTH;i++)
+			if(gridInfo[color][MAPHEIGHT][i]==0){
+				pair<int,int> tmp(MAPHEIGHT,i);
+				que.push_back(tmp);
+				FreeCellNum++,v[MAPHEIGHT][i]=1;
+			}
+		while(!que.empty()){
+			pair<int,int> tmp=que.front();
+			que.pop_front();
+			for(int i=0;i<4;i++){
+				int tmpx=tmp.first+dxdy[i][0],tmpy=tmp.second+dxdy[i][1];
+				if(!v[tmpx][tmpy]&&!gridInfo[color][tmpx][tmpy]){
+					v[tmpx][tmpy]=1,FreeCellNum++;
+					pair<int,int> tmp1(tmpx,tmpy);
+					que.push_back(tmp1);
+				}
+			}
+		}
+		for(int i=1;i<=MAPHEIGHT;i++)
+			for(int j=1;j<=MAPWIDTH;j++)
+				if(gridInfo[color][i][j])
+					GridNum++;
+		return MAPWIDTH*MAPHEIGHT-FreeCellNum-GridNum;
+	}
+double countMeanHeight(int color){
+		int Height[MAPWIDTH+1]={0};
+		double sum=0;
+		for(int i=1;i<=MAPWIDTH;i++)
+			for(int j=1;j<=MAPHEIGHT;j++)
+				if(gridInfo[color][j][i]&&Height[i]<j){
+					Height[i]=j;
+				}
+		for(int i=1;i<=MAPWIDTH;i++)
+			sum+=Height[i];
+		return sum/MAPWIDTH;
+	}
+double countHeightSMR(int color){
+		double mean=countMeanHeight(color),SS=0;
+		int Height[MAPWIDTH+1]={0};
+		for(int i=1;i<=MAPWIDTH;i++)
+			for(int j=1;j<=MAPHEIGHT;j++)
+				if(gridInfo[color][j][i]&&Height[i]<j){
+					Height[i]=j;
+				}
+		for(int i=1;i<=MAPWIDTH;i++)
+			SS+=(Height[i]-mean)*(Height[i]-mean);
+		return SS/MAPWIDTH;
+	}
+double grade(int color){
+    return countEliminatedLines(color)*weigh[0]
+        +countEmbeddedCell(color)*weigh[1]
+        +countMeanHeight(color)*weigh[2]
+        +countHeightSMR(color)*weigh[3]
+        +countHeightVariance(color)*weigh[4]
+        +countLineLeft(color)*weigh[5]
+        +countCoveredCells(color)*weigh[6];
+	}
+
+bool checkDrop(int color,int type,int x,int y,int o){
+    queue<vector<int> > que;
+    bool v[MAPWIDTH+1][MAPHEIGHT+1][4]={0};
+    vector<int> head;
+    head.push_back(x),head.push_back(y),head.push_back(o);
+    v[x][y][o]=true;
+    que.push(head);
+    while(!que.empty()){
+        vector<int> tmp(que.front());
+        que.pop();
+        if(Util::checkDirectDropTo(color,type,tmp[0],tmp[1],tmp[2]))
+            return true;
+        Tetris now(type,color);
+        now.set(tmp[0],tmp[1],tmp[2]);
+        for(int _o=0;_o<4;_o++){
+            if(tmp[2]!=_o&&!v[tmp[0]][tmp[1]][_o]){
+                if(now.set(-1,-1,_o).rotation(tmp[2])){
+                    v[tmp[0]][tmp[1]][_o]=true;
+                    vector<int> tail(tmp);
+                    tail[2]=_o;
+                    que.push(tail);
+                    now.set(-1,-1,tmp[2]);
+                }
+            }
+        }
+        for(int i=0;i<4;i++)
+            if(now.set(tmp[0]+dxdy[i][0],tmp[1]+dxdy[i][1],tmp[2]).isValid()
+               &&!v[tmp[0]+dxdy[i][0]][tmp[1]+dxdy[i][1]][tmp[2]]){
+                v[tmp[0]+dxdy[i][0]][tmp[1]+dxdy[i][1]][tmp[2]]=true;
+                vector<int> tail(tmp);
+                tail[0]+=dxdy[i][0],tail[1]+=dxdy[i][1];
+                que.push(tail);
+            }
+    }
+    return false;
+}
+double countHeightVariance(int color){
+    const int score[5]={0,1,3,5,6};
+    int height[MAPWIDTH+1]={0};
+    double ans=0;
+    for(int i=1;i<=MAPWIDTH;i++)
+        for(int j=1;j<=MAPHEIGHT;j++)
+            if(gridInfo[color][j][i]&&j>height[i])
+                height[i]=j;
+    for(int i=1;i<=MAPWIDTH;i++){
+        int tmp;
+        if(i==1)
+            tmp=height[2]-height[1];
+        else if(i==MAPWIDTH)
+            tmp=height[MAPWIDTH-1]-height[MAPWIDTH];
+        else
+            tmp=min(height[i-1]-height[i],height[i+1]-height[i]);
+        if(tmp>0)
+            ans+=score[tmp/4]+score[tmp%4];
+    }
+    return ans;
+}
+
+void displace(int color){
+    for(int i=1;i<=MAPWIDTH;i++)
+        for(int j=1;j<=MAPHEIGHT;j++)
+            if(gridInfo[color][j][i]==2)
+                gridInfo[color][j][i]=0;
+}
+
+double countLineLeft(int color){
+    double Height[MAPWIDTH+1]={0},_MaxHeight=0;
+    for(int i=1;i<=MAPWIDTH;i++)
+        for(int j=1;j<=MAPHEIGHT;j++)
+            if(gridInfo[color][j][i]&&j>Height[i])
+                Height[i]=j;
+    for(int i=1;i<=MAPWIDTH;i++)
+        if(Height[i]>_MaxHeight)
+            _MaxHeight=Height[i];
+    return 1.00/_MaxHeight;
+}
+
+int countCoveredCells(int color){
+    int height[MAPWIDTH+1]={0},CellNum=0,sum=0;
+    for(int i=1;i<=MAPWIDTH;i++)
+        for(int j=1;j<=MAPHEIGHT;j++)
+            if(gridInfo[color][j][i]){
+                CellNum++;
+                if(j>height[i])
+                    height[i]=j;
+            }
+    for(int i=1;i<=MAPWIDTH;i++)
+        sum+=height[i];
+    return sum-CellNum;
 }
